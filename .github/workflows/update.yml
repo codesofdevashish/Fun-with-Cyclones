@@ -39,7 +39,14 @@ jobs:
         run: |
           OWNER="${{ github.repository_owner }}"; REPO="${{ github.event.repository.name }}"
           if [ "$REPO" = "$OWNER.github.io" ]; then URL="https://$OWNER.github.io"; else URL="https://$OWNER.github.io/$REPO"; fi
-          python scripts/run_daily.py --site-url "$URL"
+          python scripts/run_daily.py --site-url "$URL" || {
+            code=$?
+            if [ -s public/data/storms.json ]; then
+              echo "::warning::run_daily.py exited with code $code after the site was built; publishing anyway"
+            else
+              exit $code
+            fi
+          }
 
       - name: Delete everything except the website
         run: |
