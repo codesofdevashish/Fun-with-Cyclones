@@ -1,0 +1,63 @@
+name: Daily cyclone videos
+
+on:
+  schedule:
+    - cron: "40 6 * * *"      # every day 06:40 UTC
+  workflow_dispatch:           # "Run workflow" button for a manual update
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Cache coastlines (Natural Earth)
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/cartopy
+          key: natural-earth-50m
+
+      - name: Find active storms, download GFS, render videos
+        run: |
+          OWNER="${{ github.repository_owner }}"; REPO="${{ github.event.repository.name }}"
+          if [ "$REPO" = "$OWNER.github.io" ]; then URL="https://$OWNER.github.io"; else URL="https://$OWNER.github.io/$REPO"; fi
+          python scripts/run_daily.py --site-url "$URL"
+
+      - name: Delete everything except the website
+        run: |
+          rm -rf work
+          find . -name "*.nc" -o -name "*.grb2" | xargs -r rm -f
+          du -sh public
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
