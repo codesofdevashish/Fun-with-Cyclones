@@ -14,6 +14,16 @@ rebuilt every morning by GitHub Actions. It also serves as a portfolio page (edi
 4. Only `public/` (web page, MP4s, posters, `storms.json`) is uploaded to GitHub Pages.
    No data or video is ever committed to the repository.
 
+## The website
+
+One linked viewer: pick a storm in the rail (or on the map), and the video, track map and
+official-intensity chart stay in sync. The storm marker moves along the track while the video
+plays, hovering the chart shows time, wind and position, and clicking the chart jumps the video.
+Tabs give an automatic written overview, structure gauges (shear, tilt, RMW) and facts including
+ACE. The archive can be filtered by year and basin and sorted by date, peak or ACE; an
+interactive guide explains each part of a frame. Light and dark themes; links like
+`#storm=2026_17E` open a storm directly.
+
 ## Set up (once)
 
 1. Create a **public** repository on GitHub and push these files to it.
