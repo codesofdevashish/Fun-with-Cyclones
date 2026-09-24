@@ -145,7 +145,8 @@ def main():
                         track=_json_track(st["track"]), video=f"videos/{st['key']}.mp4", poster=f"videos/{st['key']}.jpg",
                         rendered=pd.Timestamp.now("UTC").strftime("%Y-%m-%dT%H:%MZ"),
                         story=desc.get("story", []), motion=desc.get("motion"), dv24=desc.get("dv24"),
-                        trend=desc.get("trend"), env=desc.get("env"), **info))
+                        trend=desc.get("trend"), env=desc.get("env"),
+                        video_fps=round(1000.0 / R.CFG["frame_ms"], 4), video_fph=R.CFG["frames_per_hour"], **info))
         print(f"  done in {(time.time() - t0) / 60:.1f} min")
 
     # archive: storms from the previous site that are no longer active
