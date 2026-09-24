@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tropical cyclones in 3D — live</title>
+<meta name="description" content="Every active tropical cyclone on Earth, rendered daily in 3D from GFS analyses.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <a class="who" href="#top" id="who"></a>
+  <nav>
+    <a href="#active">Active storms</a>
+    <a href="#archive">Archive</a>
+    <a href="#read">How to read</a>
+    <a href="#about">About</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <svg class="isobars" viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+    <div class="hero-text">
+      <h1 id="headline">Tropical cyclones on Earth right now</h1>
+      <p id="status" class="status">Loading the latest analysis…</p>
+    </div>
+    <div id="map" role="img" aria-label="Map of active tropical cyclone tracks"></div>
+    <ol class="legend" aria-label="Intensity colours">
+      <li><i style="--c:var(--td)"></i>Depression</li>
+      <li><i style="--c:var(--ts)"></i>Tropical storm</li>
+      <li><i style="--c:var(--c1)"></i>Cat 1</li>
+      <li><i style="--c:var(--c2)"></i>Cat 2</li>
+      <li><i style="--c:var(--c3)"></i>Cat 3</li>
+      <li><i style="--c:var(--c4)"></i>Cat 4</li>
+      <li><i style="--c:var(--c5)"></i>Cat 5</li>
+    </ol>
+  </section>
+
+  <section id="active" class="block">
+    <h2>Active storms</h2>
+    <p class="lede">Each video covers up to the last five days of the storm, one frame per hour, rebuilt every morning from the newest GFS analyses.</p>
+    <div id="active-list"></div>
+  </section>
+
+  <section id="archive" class="block">
+    <h2>Archive</h2>
+    <p class="lede">The last video made for each storm that has since dissipated.</p>
+    <div id="archive-list" class="archive"></div>
+  </section>
+
+  <section id="read" class="block read">
+    <h2>How to read a video</h2>
+    <div class="read-grid">
+      <div>
+        <h3>The 3D box</h3>
+        <p>The box follows the storm from 900 hPa, near the surface, up to 500 hPa in the mid troposphere. Streamlines and drifting tracers are coloured by wind speed; strong flow is drawn brighter and thicker so the inner core stands out.</p>
+        <p>The red surface is the vortex core (high relative vorticity). Grey patches are strong ascent, where deep convection is lifting air. The floor map is shaded by the real position of the sun, so you can follow the diurnal cycle.</p>
+      </div>
+      <div>
+        <h3>Vortex tilt and shear</h3>
+        <p>The white line joins the circulation centre at each level. An upright line means an aligned vortex, which is a common precursor of rapid intensification; a leaning line means the vortex is tilted.</p>
+        <p>The orange arrow is the 850–500 hPa wind shear averaged 200–800 km from the centre. The compass in the corner compares shear and tilt directions in plan view.</p>
+      </div>
+      <div>
+        <h3>Intensity timeline</h3>
+        <p>White is the official maximum sustained wind from the warning agency (via NCEP TCVitals). Blue is the strongest 900 hPa wind in GFS near the centre, which is usually lower than the official value at 0.25° resolution.</p>
+        <p>Red shading marks rapid intensification: an official increase of at least 30 kt in 24 hours. It is never inferred from model winds.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="about" class="block about">
+    <h2>About</h2>
+    <div class="about-grid">
+      <div>
+        <p class="about-name" id="about-name"></p>
+        <p class="about-role" id="about-role"></p>
+        <p id="about-summary"></p>
+        <p class="links" id="about-links"></p>
+      </div>
+      <div>
+        <h3>Research interests</h3>
+        <ul id="about-interests"></ul>
+        <h3>Memberships</h3>
+        <ul id="about-members"></ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <p>Data: NCEP GFS 0.25° analyses and NCEP TCVitals (operational positions and intensities from NHC, CPHC, JTWC and other centres). Coastlines: Natural Earth. Basemap: © OpenStreetMap contributors, © CARTO.</p>
+  <p>Research visualisation, not an official forecast. For warnings, follow your national meteorological service.</p>
+  <p id="generated"></p>
+</footer>
+
+<dialog id="player">
+  <form method="dialog"><button class="close" aria-label="Close video">Close</button></form>
+  <h3 id="player-title"></h3>
+  <video id="player-video" controls playsinline preload="none"></video>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

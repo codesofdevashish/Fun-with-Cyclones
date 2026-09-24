@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""
+Daily job (run by GitHub Actions):
+  1. find every active tropical cyclone in the world (NCEP TCVitals)
+  2. for each: download GFS 0.25 deg for its region, render the 3D flow video
+  3. delete all downloaded data and frames straight away
+  4. carry forward videos of past storms from the live site (archive)
+  5. write public/ = website + videos + storms.json   <- the ONLY thing that gets hosted
+"""
+import argparse, json, math, os, shutil, sys, time, traceback
+import numpy as np
+import pandas as pd
+import requests
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT); sys.path.insert(0, os.path.join(ROOT, "scripts"))
+import storms as S
+import tc3d.render as R
+
+
+def _domain(track, pad=9.0, min_span=22.0):
+    lat = track.lat.values; lon = track.lon.values
+    lon180 = ((lon + 180) % 360) - 180; lon360 = lon % 360
+    use360 = np.ptp(lon360) < np.ptp(lon180)                 # dateline storms
+    lo = lon360 if use360 else lon180
+    la0, la1 = lat.min() - pad, lat.max() + pad
+    lo0, lo1 = lo.min() - pad, lo.max() + pad
+    if la1 - la0 < min_span: c = (la0 + la1) / 2; la0, la1 = c - min_span / 2, c + min_span / 2
+    if lo1 - lo0 < min_span: c = (lo0 + lo1) / 2; lo0, lo1 = c - min_span / 2, c + min_span / 2
+    la0, la1 = max(la0, -65.0), min(la1, 65.0)
+    return (round(la0), round(la1)), (math.floor(lo0), math.ceil(lo1)), bool(use360)
+
+
+def render_storm(st, latest, work, public, max_days):
+    key = st["key"]; wdir = os.path.join(work, key)
+    t_end = min(st["last_seen"], latest).floor("3h")
+    t_start = max(st["first_seen"].floor("3h"), t_end - pd.Timedelta(days=max_days))
+    if t_end - t_start < pd.Timedelta(hours=12):
+        t_start = t_end - pd.Timedelta(hours=12)
+    tr = st["track"]; tr = tr[(tr.time >= t_start - pd.Timedelta("6h")) & (tr.time <= t_end + pd.Timedelta("6h"))]
+    latr, lonr, use360 = _domain(tr)
+    peak_ms = float(tr.vmax_ms.max())
+    R._LAND = None                                             # reset coastline cache per storm
+    R._CTX.clear()
+    R.CFG.update(
+        storm_name=f"{st['label']} {st['name']} ({st['sid']})" if st["name"] != st["sid"] else f"{st['label']} {st['sid']}",
+        t_start=str(t_start), t_end=str(t_end), lat_range=latr, lon_range=lonr, lon360=use360,
+        hemi=1 if tr.lat.mean() >= 0 else -1, track_df=tr.copy(),
+        vmax=float(np.clip(math.ceil(peak_ms * 1.2 / 10) * 10, 30, 80)),
+        data_file=os.path.join(wdir, "gfs.nc"), gfs_cache=os.path.join(wdir, "cache"),
+        frame_dir=os.path.join(wdir, "frames"),
+        out_mp4=os.path.join(public, "videos", f"{key}.mp4"),
+        out_poster=os.path.join(public, "videos", f"{key}.jpg"))
+    os.makedirs(wdir, exist_ok=True)
+    try:
+        R.download_gfs()
+        ds = R.load(R.CFG["data_file"])
+        R.render(ds)
+        tt = pd.to_datetime(ds.time.values)
+        return dict(window_start=tt[0].strftime("%Y-%m-%dT%H:%MZ"), window_end=tt[-1].strftime("%Y-%m-%dT%H:%MZ"))
+    finally:
+        shutil.rmtree(wdir, ignore_errors=True)                 # delete data + frames immediately
+
+
+def _json_track(tr):
+    return [[t.strftime("%Y-%m-%dT%H:%MZ"), round(float(a), 2), round(float(o), 2), round(float(v) * 1.944)]
+            for t, a, o, v in zip(tr.time, tr.lat, tr.lon, tr.vmax_ms)]
+
+
+def _ri_any(tr, thr_kt=30):
+    tt = tr.time.values.astype("datetime64[h]").astype(int); v = tr.vmax_ms.values * 1.944
+    for i, t in enumerate(tt):
+        j = np.where(np.abs(tt - (t + 24)) <= 3)[0]
+        if len(j) and (v[j] - v[i]).max() >= thr_kt:
+            return True
+    return False
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--site-url", default="", help="live site, used to carry forward archived videos")
+    ap.add_argument("--public", default=os.path.join(ROOT, "public"))
+    ap.add_argument("--work", default=os.path.join(ROOT, "work"))
+    ap.add_argument("--max-days", type=float, default=5, help="length of each video window (days)")
+    ap.add_argument("--max-storms", type=int, default=12)
+    ap.add_argument("--archive-max", type=int, default=40)
+    ap.add_argument("--include-invests", action="store_true")
+    a = ap.parse_args()
+
+    shutil.rmtree(a.public, ignore_errors=True)
+    shutil.copytree(os.path.join(ROOT, "site"), a.public)
+    os.makedirs(os.path.join(a.public, "videos"), exist_ok=True); os.makedirs(os.path.join(a.public, "data"), exist_ok=True)
+    sess = requests.Session(); sess.headers["User-Agent"] = "tc3d-site/1.0"
+
+    # previous site data (for the archive and as a fallback if a render fails)
+    prev = {}
+    if a.site_url:
+        try:
+            r = sess.get(a.site_url.rstrip("/") + "/data/storms.json", timeout=30)
+            if r.ok: prev = {s["key"]: s for s in r.json().get("storms", [])}
+        except Exception as e:
+            print("no previous site data:", e)
+
+    def carry(s):
+        """Copy an existing video + poster from the live site into public/."""
+        ok = True
+        for ext in ("mp4", "jpg"):
+            dst = os.path.join(a.public, "videos", f"{s['key']}.{ext}")
+            try:
+                r = sess.get(a.site_url.rstrip("/") + f"/videos/{s['key']}.{ext}", timeout=120)
+                if r.ok: open(dst, "wb").write(r.content)
+                else: ok = False
+            except Exception:
+                ok = False
+        return ok
+
+    active, latest = S.find_active(include_invests=a.include_invests)
+    print(f"latest TCVitals cycle: {latest}   active storms: {[s['key'] for s in active]}")
+    active = sorted(active, key=lambda s: -s["vmax_kt"])[:a.max_storms]
+    out = []
+    for st in active:
+        print(f"\n=== {st['key']}  {st['label']} {st['name']}  {st['vmax_kt']} kt ===")
+        t0 = time.time(); info = {}
+        try:
+            info = render_storm(st, latest, a.work, a.public, a.max_days); ok = True
+        except Exception:
+            traceback.print_exc(); ok = st["key"] in prev and carry(prev[st["key"]])
+        if not ok:
+            print("  skipped (no video)"); continue
+        out.append(dict(key=st["key"], sid=st["sid"], year=st["year"], name=st["name"], label=st["label"],
+                        category=st["category"], basin=st["basin"], basin_name=st["basin_name"], centre=st["centre"],
+                        status="active", lat=st["lat"], lon=st["lon"], vmax_kt=st["vmax_kt"], pmin=st["pmin"],
+                        peak_kt=st["peak_kt"], ri=_ri_any(st["track"]),
+                        first_seen=st["first_seen"].strftime("%Y-%m-%dT%H:%MZ"),
+                        last_seen=st["last_seen"].strftime("%Y-%m-%dT%H:%MZ"),
+                        track=_json_track(st["track"]), video=f"videos/{st['key']}.mp4", poster=f"videos/{st['key']}.jpg",
+                        rendered=pd.Timestamp.now("UTC").strftime("%Y-%m-%dT%H:%MZ"), **info))
+        print(f"  done in {(time.time() - t0) / 60:.1f} min")
+
+    # archive: storms from the previous site that are no longer active
+    done = {s["key"] for s in out}
+    arch = sorted([s for k, s in prev.items() if k not in done], key=lambda s: s.get("last_seen", ""), reverse=True)
+    for s in arch[:a.archive_max]:
+        if carry(s):
+            s["status"] = "archived"; out.append(s)
+
+    json.dump(dict(generated=pd.Timestamp.now("UTC").strftime("%Y-%m-%dT%H:%MZ"),
+                   latest_cycle=str(latest) if latest is not None else None, storms=out),
+              open(os.path.join(a.public, "data", "storms.json"), "w"), indent=1)
+    shutil.rmtree(a.work, ignore_errors=True)
+    n_act = sum(s["status"] == "active" for s in out)
+    size = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(a.public) for f in fs) / 1e6
+    print(f"\nsite ready: {n_act} active, {len(out) - n_act} archived, {size:.0f} MB in {a.public}")
+
+
+if __name__ == "__main__":
+    main()
