@@ -53,11 +53,15 @@
   const map = L_map();
   function L_map() {
     if (!window.L) return null;
-    const m = window.L.map("map", { worldCopyJump: true, minZoom: 1, zoomSnap: 0.5, scrollWheelZoom: false })
-      .setView([12, 80], 2);
-    window.L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-      attribution: "© OpenStreetMap contributors © CARTO", subdomains: "abcd", maxZoom: 8,
-    }).addTo(m);
+    // Free basemaps, no API key: Esri World Light Gray, with OpenStreetMap as automatic fallback.
+    const esri = window.L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      { attribution: "Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors", maxZoom: 16 });
+    const osm = window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { attribution: "© OpenStreetMap contributors", maxZoom: 18 });
+    let errors = 0;
+    esri.on("tileerror", () => { if (++errors === 6) { m.removeLayer(esri); osm.addTo(m); } });
+    esri.addTo(m);
     return m;
   }
   function drawTrack(s) {
