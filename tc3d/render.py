@@ -538,6 +538,7 @@ def _timeline(fig, rect, times, D, tnow, fc):
 # 5. RENDER  (phase 1: cheap sequential state; phase 2: frames drawn in parallel)
 # ----------------------------------------------------------------------------
 _CTX = {}
+LAST_DIAG = None
 
 def _latlon(c):
     lo = ((c[1] + 180) % 360) - 180
@@ -733,6 +734,17 @@ def render(ds, skip_hours=0, max_hours=None):
     print("computing diagnostics ...")
     D = diagnostics(ds, track)
     trs = np.c_[gaussian_filter(track[:, 0], 2, mode="nearest"), gaussian_filter(track[:, 1], 2, mode="nearest")]
+    # structure summary for the written description (last analysis vs 24 h earlier)
+    global LAST_DIAG
+    tt = ds.time.values; n = len(tt) - 1
+    k24 = int(np.argmin(np.abs(tt - (tt[n] - np.timedelta64(24, "h")))))
+    has24 = abs((tt[n] - tt[k24]) / np.timedelta64(1, "h") - 24) <= 3
+    shv = D["shear"][n]; tv = D["tilt"][n]
+    LAST_DIAG = dict(shear_now=float(np.hypot(*shv)), shear_from=float((np.degrees(np.arctan2(shv[0], shv[1])) + 180) % 360),
+                     tilt_now=float(np.hypot(*tv)), tilt_dir=float((np.degrees(np.arctan2(tv[0], tv[1])) + 360) % 360),
+                     tilt_24=float(np.hypot(*D["tilt"][k24])) if has24 else None,
+                     rmw_now=float(D["rmw"][n] * 111), rmw_24=float(D["rmw"][k24] * 111) if has24 else None,
+                     gfs_vmax=float(D["vmax"][n]))
     print("advecting tracer particles ...")
     states = _frame_states(ds, track, trs, D)
     nfr = len(states)

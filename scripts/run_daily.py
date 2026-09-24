@@ -15,6 +15,7 @@ import requests
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT); sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import storms as S
+import narrative as N
 import tc3d.render as R
 
 
@@ -55,6 +56,7 @@ def render_storm(st, latest, work, public, max_days):
     try:
         R.download_gfs()
         ds = R.load(R.CFG["data_file"])
+        R.LAST_DIAG = None
         R.render(ds)
         tt = pd.to_datetime(ds.time.values)
         return dict(window_start=tt[0].strftime("%Y-%m-%dT%H:%MZ"), window_end=tt[-1].strftime("%Y-%m-%dT%H:%MZ"))
@@ -127,6 +129,13 @@ def main():
             traceback.print_exc(); ok = st["key"] in prev and carry(prev[st["key"]])
         if not ok:
             print("  skipped (no video)"); continue
+        try:
+            desc = N.describe(st, R.LAST_DIAG if info else None, N.geography())
+        except Exception:
+            traceback.print_exc(); desc = {}
+        if not info and st["key"] in prev:                         # render failed: keep yesterday's structure text
+            old = prev[st["key"]].get("story", [])
+            if len(old) > 1 and len(desc.get("story", [])) == 1: desc["story"].append(old[1])
         out.append(dict(key=st["key"], sid=st["sid"], year=st["year"], name=st["name"], label=st["label"],
                         category=st["category"], basin=st["basin"], basin_name=st["basin_name"], centre=st["centre"],
                         status="active", lat=st["lat"], lon=st["lon"], vmax_kt=st["vmax_kt"], pmin=st["pmin"],
@@ -134,7 +143,9 @@ def main():
                         first_seen=st["first_seen"].strftime("%Y-%m-%dT%H:%MZ"),
                         last_seen=st["last_seen"].strftime("%Y-%m-%dT%H:%MZ"),
                         track=_json_track(st["track"]), video=f"videos/{st['key']}.mp4", poster=f"videos/{st['key']}.jpg",
-                        rendered=pd.Timestamp.now("UTC").strftime("%Y-%m-%dT%H:%MZ"), **info))
+                        rendered=pd.Timestamp.now("UTC").strftime("%Y-%m-%dT%H:%MZ"),
+                        story=desc.get("story", []), motion=desc.get("motion"), dv24=desc.get("dv24"),
+                        trend=desc.get("trend"), env=desc.get("env"), **info))
         print(f"  done in {(time.time() - t0) / 60:.1f} min")
 
     # archive: storms from the previous site that are no longer active

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tropical cyclones in 3D — live</title>
 <meta name="description" content="Every active tropical cyclone on Earth, rendered daily in 3D from GFS analyses.">
+<meta property="og:title" content="Tropical cyclones in 3D, updated daily">
+<meta property="og:description" content="3D flow, vortex tilt and shear for every active tropical cyclone, rebuilt every morning.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,6 +31,7 @@
     <div class="hero-text">
       <h1 id="headline">Tropical cyclones on Earth right now</h1>
       <p id="status" class="status">Loading the latest analysis…</p>
+      <ul id="now" class="now" aria-label="Active storms"></ul>
     </div>
     <div id="map" role="img" aria-label="Map of active tropical cyclone tracks"></div>
     <ol class="legend" aria-label="Intensity colours">
@@ -44,7 +47,7 @@
 
   <section id="active" class="block">
     <h2>Active storms</h2>
-    <p class="lede">Each video covers up to the last five days of the storm, one frame per hour, rebuilt every morning from the newest GFS analyses.</p>
+    <p class="lede">Each video covers up to the last five days of the storm, one frame per hour, rebuilt every morning from the newest GFS analyses. The notes under each video are written automatically from the official track and the GFS structure diagnostics.</p>
     <div id="active-list"></div>
   </section>
 
@@ -82,6 +85,7 @@
         <p class="about-name" id="about-name"></p>
         <p class="about-role" id="about-role"></p>
         <p id="about-summary"></p>
+        <p id="site-stats"></p>
         <p class="links" id="about-links"></p>
       </div>
       <div>
@@ -104,6 +108,7 @@
   <form method="dialog"><button class="close" aria-label="Close video">Close</button></form>
   <h3 id="player-title"></h3>
   <video id="player-video" controls playsinline preload="none"></video>
+  <div id="player-story" class="player-story"></div>
 </dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
