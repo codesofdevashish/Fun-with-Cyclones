@@ -166,3 +166,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # Everything is written. Exit straight away: letting Python unload the compiled GRIB / netCDF /
+    # PROJ libraries at shutdown can abort with "double free or corruption" (exit 134).
+    sys.stdout.flush(); sys.stderr.flush()
+    os._exit(0)
